@@ -1,0 +1,24 @@
+name: galaxy-morphology
+channels:
+    - pytorch
+    - conda-forge
+    - defaults
+
+dependencies:
+    - python=3.11
+    - numpy
+    - pandas
+    - scikit-learn
+    - scipy
+    - pillow
+    - matplotlib
+    - seaborn
+    - umap-learn
+    - hdbscan
+    - tqdm
+    - jupyter
+    - ipykernel
+    - pytorch-lightning
+    - albumentations
+    - tensorboard
+    - pip

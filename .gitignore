@@ -1,1 +1,3 @@
-data/images_gz2/
+data/images/
+data/gz2spec.csv
+.vscode
