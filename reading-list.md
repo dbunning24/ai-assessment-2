@@ -19,3 +19,7 @@ https://www.sciencedirect.com/science/article/pii/S2213133724000660
 ## Unsupervised Galaxy Morphological Visual Representation with Deep Contrastive Learning
 
 https://arxiv.org/abs/2211.07168
+
+## Rotation-invariant convolutional neural networks for galaxy morphology prediction
+
+https://academic.oup.com/mnras/article/450/2/1441/979677?login=true
