@@ -10,7 +10,7 @@ https://arxiv.org/abs/2401.08906
 
 ## Galaxy morphological classification in deep-wide surveys via unsupervised machine learning
 
-https://researchprofiles.herts.ac.uk/en/publications/galaxy-morphological-classification-in-deep-wide-surveys-via-unsu/
+https://academic.oup.com/mnras/article/491/1/1408/5607807
 
 ## A review of unsupervised learning in astronomy
 
