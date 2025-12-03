@@ -18,7 +18,8 @@ dependencies:
     - tqdm
     - jupyter
     - ipykernel
+    - pytorch
     - pytorch-lightning
-    - albumentations
+    - torchvision
     - tensorboard
     - pip
