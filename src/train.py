@@ -46,33 +46,46 @@ def calculate_normalization_stats(
     logger.info(f'Computing normalisation statistics from {n_samples} images...')
     
     # Load data
+    logger.info(f'  Loading morphology data from {csv_path}...')
     morph_data = pd.read_csv(csv_path)
+    logger.info(f'  ✓ Loaded {len(morph_data)} galaxy records.')
     
+    logger.info(f'  Scanning for present images in {image_dir}...')
     image_dir_path = Path(image_dir)
     present_ids = {
         int(f.stem) for f in image_dir_path.glob("*.jpg")
     }
+    logger.info(f'  ✓ Found {len(present_ids)} image files.')
     
+    logger.info(f'  Loading image mappings from {mapping_csv}...')
     mapping_data = pd.read_csv(mapping_csv)
     mapping_data = mapping_data[mapping_data['asset_id'].isin(present_ids)]
+    logger.info(f'  ✓ Loaded {len(mapping_data)} mappings with available images.')
     
+    logger.info('  Merging spectroscopic data with image mappings...')
     galaxy_data = morph_data.merge(
         mapping_data,
         left_on='dr7objid',
         right_on='objid',
         how='inner'
     )
+    logger.info(f'  ✓ Merged to {len(galaxy_data)} galaxies.')
     
     if len(galaxy_data) > n_samples:
+        logger.info(f'  Sampling {n_samples} galaxies...')
         galaxy_data = galaxy_data.sample(n=n_samples, random_state=42)
+        logger.info(f'  ✓ Sampled to {len(galaxy_data)} galaxies.')
     
     galaxy_ids = galaxy_data['asset_id'].values
     
     # Accumulate statistics
+    logger.info(f'  Computing statistics from {len(galaxy_ids)} images...')
     means = np.zeros(3)
     stds = np.zeros(3)
     
-    for galaxy_id in galaxy_ids:
+    for idx, galaxy_id in enumerate(galaxy_ids):
+        if idx % max(1, len(galaxy_ids) // 5) == 0:
+            logger.info(f'    Progress: [{idx}/{len(galaxy_ids)}]')
         image_path = image_dir_path / f"{galaxy_id}.jpg"
         if not image_path.exists():
             continue
@@ -86,8 +99,9 @@ def calculate_normalization_stats(
     means = (means / len(galaxy_ids)).tolist()
     stds = (stds / len(galaxy_ids)).tolist()
     
-    logger.info(f'Normalisation means: {means}')
-    logger.info(f'Normalisation stds: {stds}')
+    logger.info(f'✓ Normalisation statistics computed:')
+    logger.info(f'  Means (RGB): {[round(m, 4) for m in means]}')
+    logger.info(f'  Stds (RGB): {[round(s, 4) for s in stds]}')
     
     return means, stds
 
@@ -109,15 +123,17 @@ def setup_profile(profile: str) -> dict:
             'batch_size': 256,
             'num_workers': 4,
             'max_epochs': 100,
+            'n_samples': 100000,
         }
     elif profile == 'B':
-        logger.info('Profile B (Laptop/CPU) selected: Development run')
+        logger.info('Profile B (Laptop/CPU) selected: Development run (~5 mins)')
         return {
             'accelerator': 'auto',  # Auto-detect CPU/GPU
             'precision': '32',
-            'batch_size': 64,
-            'num_workers': 4,
-            'max_epochs': 10,
+            'batch_size': 32,
+            'num_workers': 0,
+            'max_epochs': 2,
+            'n_samples': 1000,
         }
     else:
         raise ValueError(f"Unknown profile: {profile}. Choose 'A' or 'B'.")
@@ -171,23 +187,25 @@ def main() -> None:
     logger.info(f'Loading data from {data_path}')
     
     # Calculate normalisation statistics
+    logger.info('Step 1/4: Computing normalisation statistics...')
     norm_stats = calculate_normalization_stats(
         csv_path, image_dir, mapping_csv, n_samples=10000
     )
     
     # Create dataset
-    logger.info('Creating dataset...')
+    logger.info('Step 2/4: Creating dataset...')
     dataset = GalaxyZooDataset(
         csv_path=csv_path,
         image_dir=image_dir,
         mapping_csv=mapping_csv,
-        n_samples=100000,
+        n_samples=profile_config['n_samples'],
         image_size=64,
         normalization_stats=norm_stats,
     )
-    logger.info(f'Dataset created with {len(dataset)} galaxies.')
+    logger.info(f'✓ Dataset created with {len(dataset)} galaxies.')
     
     # Create data loader
+    logger.info('Step 3/4: Creating data loader...')
     dataloader = DataLoader(
         dataset,
         batch_size=profile_config['batch_size'],
@@ -196,11 +214,11 @@ def main() -> None:
         pin_memory=True,
     )
     logger.info(
-        f"Data loader created with batch_size={profile_config['batch_size']}"
+        f"✓ Data loader created with batch_size={profile_config['batch_size']}"
     )
     
     # Create model
-    logger.info('Creating SimCLR model...')
+    logger.info('Step 4/4: Creating SimCLR model...')
     model = SimCLR(
         batch_size=profile_config['batch_size'],
         base_lr=1e-3,
@@ -209,9 +227,13 @@ def main() -> None:
         temperature=0.5,
         image_size=64,
     )
+    logger.info('✓ SimCLR model initialized.')
     
     # Create trainer
     logger.info('Creating PyTorch Lightning trainer...')
+    logger.info(f'  Accelerator: {profile_config["accelerator"]}')
+    logger.info(f'  Precision: {profile_config["precision"]}')
+    logger.info(f'  Max epochs: {profile_config["max_epochs"]}')
     trainer = pl.Trainer(
         accelerator=profile_config['accelerator'],
         precision=profile_config['precision'],
@@ -220,12 +242,17 @@ def main() -> None:
         log_every_n_steps=10,
         enable_model_summary=True,
     )
+    logger.info('✓ Trainer initialized.')
     
     # Train
+    logger.info('='*60)
     logger.info('Starting training...')
+    logger.info('='*60)
     trainer.fit(model, dataloader)
     
-    logger.info('Training complete.')
+    logger.info('='*60)
+    logger.info('✓ Training complete.')
+    logger.info('='*60)
 
 
 if __name__ == '__main__':
