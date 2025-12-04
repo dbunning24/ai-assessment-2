@@ -46,9 +46,8 @@ class GalaxyZooDataset(Dataset):
         self.image_dir = Path(image_dir)
         self.image_size = image_size
         
-        # Load and filter data
+        # Load data
         morph_data = pd.read_csv(csv_path)
-        morph_data = morph_data[morph_data['z'] > 0]  # Extragalactic only
         
         # Get available images
         present_ids = {
@@ -62,7 +61,7 @@ class GalaxyZooDataset(Dataset):
         self.galaxy_data = morph_data.merge(
             mapping_data,
             left_on='dr7objid',
-            right_on='dr7_objid',
+            right_on='objid',
             how='inner'
         )
         
@@ -88,7 +87,7 @@ class GalaxyZooDataset(Dataset):
             ),
             transforms.RandomHorizontalFlip(p=0.5),  # Universe is isotropic
             transforms.RandomVerticalFlip(p=0.5),    # Universe is isotropic
-            transforms.RandomRotation(degrees=(90, 180, 270)),
+            transforms.RandomRotation(degrees=(-180, 180)),  # Arbitrary rotation
             transforms.ColorJitter(
                 brightness=0.2,
                 contrast=0.2,

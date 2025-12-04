@@ -45,9 +45,8 @@ def calculate_normalization_stats(
     """
     logger.info(f'Computing normalisation statistics from {n_samples} images...')
     
-    # Load and filter data
+    # Load data
     morph_data = pd.read_csv(csv_path)
-    morph_data = morph_data[morph_data['z'] > 0]
     
     image_dir_path = Path(image_dir)
     present_ids = {
@@ -60,7 +59,7 @@ def calculate_normalization_stats(
     galaxy_data = morph_data.merge(
         mapping_data,
         left_on='dr7objid',
-        right_on='dr7_objid',
+        right_on='objid',
         how='inner'
     )
     

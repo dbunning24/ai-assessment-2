@@ -135,8 +135,6 @@ class SimCLR(pl.LightningModule):
         # Apply linear scaling rule
         scaled_lr = self.base_lr * (self.batch_size / 256.0)
         
-        self.log('learning_rate', scaled_lr)
-        
         optimizer = Adam(
             self.parameters(),
             lr=scaled_lr,

@@ -77,19 +77,19 @@ Workers: 4 (Safe on Linux).
 
 Directory Structure:
 
-data/gz2spec.csv
+data/gz2spec.csv (Spectroscopic data: dr7objid, vote fractions, etc.)
 
-data/gz2maps.csv
+data/gz2maps.csv (Image mapping: objid, asset_id, etc.)
 
-data/images/ (Contains raw images).
+data/images/ (Contains raw JPG images, named by asset_id).
 
 Preprocessing Logic:
 
-Load Data: Load gz2spec.csv.
+Load Data: Load gz2spec.csv and gz2maps.csv.
 
-Subset Selection: Randomly sample 100,000 galaxies (or top 100k by magnitude) to reduce computational load.
+Subset Selection: Randomly sample 100,000 galaxies to reduce computational load.
 
-Filtering: Filter for z > 0 (extragalactic only).
+Data Merging: Join on dr7objid (spec) ↔ objid (maps). **CORRECTION**: This dataset is spectroscopic and does NOT have a z column for redshift filtering as mentioned in original instructions.
 
 Image Processing:
 
@@ -105,6 +105,8 @@ Create GalaxyZooDataset(Dataset).
 
 Output: __getitem__ must return (view1, view2, galaxy_id).
 
+Data Merging: Join gz2spec.csv and gz2maps.csv on dr7objid (spec) ↔ objid (maps). Filter to only images present in data/images/.
+
 Augmentation (Use torchvision.transforms):
 
 Note: Do not use Albumentations; stick to Torchvision for native Tensor integration.
@@ -113,15 +115,15 @@ Include:
 
 RandomResizedCrop (scale=(0.5, 1.0))
 
-RandomHorizontalFlip (p=0.5)
+RandomHorizontalFlip (p=0.5) - Universe is isotropic
 
-RandomVerticalFlip (p=0.5)
+RandomVerticalFlip (p=0.5) - Universe is isotropic
 
-RandomRotation (90, 180, 270)
+RandomRotation (degrees range, e.g., (0, 360)) - Galaxy orientation is arbitrary
 
-ColorJitter (brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05) - Mild only.
+ColorJitter (brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05) - Mild only, colour is physically meaningful.
 
-Exclude: RandomGrayscale (colour is physical), GaussianBlur (blurs arms).
+Exclude: RandomGrayscale (colour is physical), GaussianBlur (blurs arms/morphological features).
 
 3. The Lightning Module (src/model.py)
 
@@ -165,11 +167,13 @@ Logic: Cosine similarity matrix between all views in batch. Maximize agreement b
 
 Setup pl.Trainer dynamically based on Hardware Profile (Section 0.1).
 
-Initialize SimCLR module.
+Normalization Stats: Calculate channel-wise mean/std from 10k image subset before creating DataLoader.
+
+Initialize SimCLR module with batch_size-dependent learning rate (linear scaling rule).
 
 Initialize DataLoader with profile-specific batch size and workers.
 
-Run trainer.fit(model, dataloader).
+Run trainer.fit(model, dataloader) with fast_dev_run=True for validation, then full training.
 
 6. Analysis Pipeline (notebooks/analysis.ipynb)
 
@@ -203,4 +207,16 @@ Use Type Hinting.
 
 Use British English in comments/plots ("Colour", "Normalised").
 
-Document the "Why" (e.g., "Vertical flip used because universe is isotropic").
+Document the "Why" with astrophysical justification (e.g., "Vertical flip used because universe is isotropic").
+
+Implementation Notes (Corrections)
+
+**Data Issue**: Original instructions specified z > 0 filtering for extragalactic objects. This dataset does NOT contain a z column; it is pre-filtered spectroscopic data. Remove z filtering.
+
+**Merge Keys**: Join dr7objid (from gz2spec.csv) with objid (from gz2maps.csv), NOT dr8objid.
+
+**Image Naming**: Images are named by asset_id from gz2maps.csv.
+
+**RandomRotation**: Use torchvision.transforms.RandomRotation(degrees=(0, 360)) with a range, not discrete angles like (90, 180, 270).
+
+**Logging**: Do not call self.log() in configure_optimizers(); logging only works in training/validation steps.
