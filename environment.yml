@@ -1,6 +1,7 @@
 name: galaxy-morphology
 channels:
     - pytorch
+    - nvidia
     - conda-forge
     - defaults
 
@@ -18,8 +19,12 @@ dependencies:
     - tqdm
     - jupyter
     - ipykernel
-    - pytorch
-    - pytorch-lightning
-    - torchvision
     - tensorboard
+
+    # --- PyTorch with CUDA 12.1 support (NVIDIA desktop) ---
+    - pytorch=2.1
+    - torchvision
+    - torchaudio
+    - pytorch-cuda=12.1
+
     - pip

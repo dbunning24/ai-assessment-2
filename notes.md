@@ -17,8 +17,6 @@ finally, i manually inspect the results. i check how the umap plot looks, how th
 # todo
 
 -   read relevant papers on unsupervised learning in astronomy and galaxy morphology
--   download gz2specz.csv from galaxy zoo 2 on to laptop
--   install separate pytorch versions for pc (cudo) and laptop (cpu only)
 -   set up data pipeline to load images and preprocess them for simclr
 -   implement simclr training loop
 -   run simclr on galaxy zoo 2 images to get embeddings
