@@ -43,72 +43,53 @@ TAG_DIR = Path("outputs") / TAG
 
 
 # ------------------------------------------------------------
-# LOAD ARRAYS
+# LOAD EMBEDDING + IDS
 # ------------------------------------------------------------
 
 umap = np.load(TAG_DIR / "umap_embedding.npy")
-clusters = np.load(TAG_DIR / "cluster_labels.npy")
 asset_ids = np.load("ids.npy").astype(int)
 
-# images folder resolution:
+# detect cluster files
+CLUSTER_FILES = {
+    "merged": TAG_DIR / "merged_clusters.npy",
+    "umap": TAG_DIR / "umap_clusters.npy",
+    "pca": TAG_DIR / "pca_clusters.npy",
+}
+
+# ------------------------------------------------------------
+# IMAGE DIRECTORY
+# ------------------------------------------------------------
 IMAGE_DIR = TAG_DIR / "images"
 if not IMAGE_DIR.exists():
-    IMAGE_DIR = Path("data/images")  # fallback
+    IMAGE_DIR = Path("data/images")
 print("using images from:", IMAGE_DIR)
 
 
 # ------------------------------------------------------------
-# LOAD CSVs + TRUE ALIGNMENT PIPELINE
-# ------------------------------------------------------------
-# ------------------------------------------------------------
-# CORRECT ALIGNMENT PIPELINE
+# LOAD CSV METADATA
 # ------------------------------------------------------------
 
-maps = pd.read_csv("data/gz2maps.csv")     # columns: asset_id, objid
-spec = pd.read_csv("data/gz2spec.csv")     # columns include dr7objid
+maps = pd.read_csv("data/gz2maps.csv")
+spec = pd.read_csv("data/gz2spec.csv")
 
-# normalise column types
 maps["asset_id"] = pd.to_numeric(maps["asset_id"], errors="coerce").astype("Int64")
-maps["objid"]    = pd.to_numeric(maps["objid"],    errors="coerce").astype("Int64")
 spec["dr7objid"] = pd.to_numeric(spec["dr7objid"], errors="coerce").astype("Int64")
 
-# base df: idx + asset_id
-df = pd.DataFrame({"idx": np.arange(len(asset_ids)), "asset_id": asset_ids})
+df_base = pd.DataFrame({"idx": np.arange(len(asset_ids)), "asset_id": asset_ids})
+df_base = df_base.merge(maps[["asset_id", "objid"]], on="asset_id", how="left")
+df_base = df_base.rename(columns={"objid": "dr7objid"})
+df_base = df_base.merge(spec, on="dr7objid", how="inner").reset_index(drop=True)
 
-# merge asset_id -> objid
-df = df.merge(
-    maps[["asset_id", "objid"]],
-    on="asset_id",
-    how="left"
-)
+if len(df_base) > MAX_POINTS:
+    df_base = df_base.sample(MAX_POINTS, random_state=42).reset_index(drop=True)
 
-# rename objid → dr7objid (Galaxy Zoo DR2 uses DR7 objid)
-df = df.rename(columns={"objid": "dr7objid"})
+df_base["x"] = umap[df_base["idx"], 0]
+df_base["y"] = umap[df_base["idx"], 1]
 
-# merge dr7objid -> vote fractions
-df = df.merge(
-    spec,
-    on="dr7objid",
-    how="inner"
-).reset_index(drop=True)
 
-# restrict arrays to the aligned rows
-if len(df) == 0:
-    raise RuntimeError("alignment produced 0 rows — check maps CSV!")
-
-if len(df) > MAX_POINTS:
-    df = df.sample(MAX_POINTS, random_state=42).reset_index(drop=True)
-
-df["x"] = umap[df["idx"], 0]
-df["y"] = umap[df["idx"], 1]
-df["cluster"] = clusters[df["idx"]]
-
-# rename morphology columns to your clean names
+# morphology columns
 for simple, raw in MORPH_MAP.items():
-    if raw in df.columns:
-        df[simple] = df[raw].astype(float)
-    else:
-        df[simple] = np.nan
+    df_base[simple] = df_base.get(raw, np.nan).astype(float)
 
 
 # ------------------------------------------------------------
@@ -137,17 +118,16 @@ def load_full(aid):
     return base64.b64encode(buf.getvalue()).decode()
 
 
-# precompute thumbnails
-df["thumb"] = df["asset_id"].apply(load_thumb)
+# cache thumbnails
+df_base["thumb"] = df_base["asset_id"].apply(load_thumb)
 
 
 # ------------------------------------------------------------
-# FIGURE
+# FIGURE BUILDER
 # ------------------------------------------------------------
 
-def make_figure(mode="cluster"):
+def make_figure(df, mode="cluster"):
     if mode == "cluster":
-        # treat clusters as categories, not strings
         colors = df["cluster"].astype("category")
         colorscale = None
         showscale = False
@@ -180,22 +160,34 @@ def make_figure(mode="cluster"):
 
     fig.update_layout(
         width=800,
-        height=800,
+        height=850,
         title=f"UMAP ({TAG})",
-        dragmode="pan",
+        dragmode="pan"
     )
 
     return fig
 
 
 # ------------------------------------------------------------
-# DASH LAYOUT
+# DASH APP
 # ------------------------------------------------------------
 
 app = Dash(__name__)
 
 app.layout = html.Div([
     html.Div([
+        html.Label("Cluster source:"),
+        dcc.Dropdown(
+            id="cluster-source",
+            options=[
+                {"label": "Merged clusters (recommended)", "value": "merged"},
+                {"label": "UMAP HDBSCAN clusters", "value": "umap"},
+                {"label": "PCA HDBSCAN clusters", "value": "pca"},
+            ],
+            value="merged",
+            style={"width": "350px"}
+        ),
+
         html.Label("Colour mode:"),
         dcc.Dropdown(
             id="colour-mode",
@@ -203,9 +195,10 @@ app.layout = html.Div([
                     [{"label": k, "value": k} for k in MORPH_MAP.keys()],
             value="cluster",
             clearable=False,
-            style={"width": "300px"}
+            style={"width": "300px", "margin-top": "10px"}
         ),
-        dcc.Graph(id="scatter", figure=make_figure("cluster")),
+
+        dcc.Graph(id="scatter"),
     ], style={"width": "65%", "display": "inline-block"}),
 
     html.Div([
@@ -216,7 +209,8 @@ app.layout = html.Div([
         html.Button("View Cluster Gallery", id="gallery-btn", n_clicks=0,
                     style={"margin-top": "20px"}),
         html.Div(id="gallery-output"),
-    ], style={"width": "30%", "display": "inline-block", "vertical-align": "top", "padding": "20px"}),
+    ], style={"width": "30%", "display": "inline-block", "vertical-align": "top",
+              "padding": "20px"}),
 ])
 
 
@@ -226,46 +220,56 @@ app.layout = html.Div([
 
 @callback(
     Output("scatter", "figure"),
+    Input("cluster-source", "value"),
     Input("colour-mode", "value"),
 )
-def update_colouring(mode):
-    return make_figure(mode)
+def update_plot(cluster_source, colour_mode):
+    df = df_base.copy()
+    df["cluster"] = np.load(CLUSTER_FILES[cluster_source])[df["idx"]]
+    return make_figure(df, mode=colour_mode)
 
 
 @callback(
     Output("full-image", "src"),
     Output("galaxy-info", "children"),
     Input("scatter", "clickData"),
+    Input("cluster-source", "value"),
 )
-def update_selected(click):
+def update_selected(click, cluster_source):
     if click is None:
         return None, "click a galaxy"
 
     aid = int(click["points"][0]["text"])
-    row = df[df["asset_id"] == aid].iloc[0]
+    df = df_base.copy()
+    df["cluster"] = np.load(CLUSTER_FILES[cluster_source])[df["idx"]]
 
+    row = df[df["asset_id"] == aid].iloc[0]
     info = f"ID: {aid} | Cluster: {row['cluster']}"
+
     return f"data:image/png;base64,{load_full(aid)}", info
 
 
 @callback(
     Output("gallery-output", "children"),
     Input("gallery-btn", "n_clicks"),
-    State("scatter", "clickData")
+    State("scatter", "clickData"),
+    State("cluster-source", "value"),
 )
-def show_gallery(n, click):
+def show_gallery(n, click, cluster_source):
     if n == 0 or click is None:
         return ""
 
     aid = int(click["points"][0]["text"])
-    clust = df[df["asset_id"] == aid]["cluster"].iloc[0]
+    df = df_base.copy()
+    df["cluster"] = np.load(CLUSTER_FILES[cluster_source])[df["idx"]]
 
+    clust = df[df["asset_id"] == aid]["cluster"].iloc[0]
     members = df[df["cluster"] == clust]
 
     thumbs = [
         html.Div([
             html.Img(
-                src=f"data:image/png;base64,{load_thumb(int(row.asset_id), size=100)}"
+                src=f"data:image/png;base64,{row.thumb}"
             ),
             html.Div(str(row.asset_id))
         ], style={"display": "inline-block", "margin": "5px"})
