@@ -9,18 +9,17 @@ from models.nt_xent import NTXentLoss
 
 from tqdm import tqdm
 import argparse
-import os
 
 
 def train(
     csv_path: str,
     mapping_csv: str,
     image_dir: str,
-    batch_size: int = 256,
+    batch_size: int = 32,
     epochs: int = 100,
-    n_samples: int = 100000,
-    lr: float = 1e-3,
-    temperature: float = 0.5,
+    n_samples: int = 15000,
+    lr: float = 3e-4,
+    temperature: float = 0.25,
     device: str | None = None,
 ):
     # -------------------------
@@ -38,7 +37,7 @@ def train(
         mapping_csv=mapping_csv,
         image_dir=image_dir,
         n_samples=n_samples,
-        image_size=64,
+        image_size=96,
     )
 
     dataloader = DataLoader(
@@ -102,11 +101,11 @@ if __name__ == "__main__":
     parser.add_argument("--mapping-csv", type=str, default="data/gz2maps.csv")
     parser.add_argument("--image-dir", type=str, default="data/images")
 
-    parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--n-samples", type=int, default=100000)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--temperature", type=float, default=0.5)
+    parser.add_argument("--n-samples", type=int, default=15000)
+    parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--temperature", type=float, default=0.25)
 
     parser.add_argument("--device", type=str, default=None,
                         help="force 'cpu' or 'cuda'; default auto-detect")

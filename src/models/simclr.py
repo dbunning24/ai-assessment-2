@@ -6,23 +6,22 @@ import torchvision.models as models
 class SimCLR(nn.Module):
     """
     Pure PyTorch SimCLR model:
-    - ResNet18 encoder (fc removed)
+    - ResNet34 encoder (fc removed)
     - 2-layer projection head
     """
 
     def __init__(
         self,
         projection_dim: int = 128,
-        hidden_dim: int = 512,
     ):
         super().__init__()
 
         # -------------------------
-        # Encoder: ResNet-18
+        # Encoder: ResNet-34
         # -------------------------
-        resnet = models.resnet18(weights=None)
+        resnet = models.resnet34(weights=None)
 
-        # Replace first conv for small images (64x64)
+        # Make it friendlier for small-ish images (96x96)
         resnet.conv1 = nn.Conv2d(
             3, 64, kernel_size=3, stride=1, padding=1, bias=False
         )
@@ -31,16 +30,16 @@ class SimCLR(nn.Module):
         # Remove classifier head
         self.encoder = nn.Sequential(*list(resnet.children())[:-1])
 
-        # Feature dimension (ResNet18 outputs 512)
-        self.encoder_dim = hidden_dim
+        # ResNet34 final feature dim
+        self.encoder_dim = 512
 
         # -------------------------
         # Projection Head (MLP)
         # -------------------------
         self.projector = nn.Sequential(
-            nn.Linear(self.encoder_dim, self.encoder_dim),
+            nn.Linear(self.encoder_dim, 256),
             nn.ReLU(),
-            nn.Linear(self.encoder_dim, projection_dim),
+            nn.Linear(256, projection_dim),
         )
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:

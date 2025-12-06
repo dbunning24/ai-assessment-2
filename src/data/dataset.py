@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import Tuple
 
@@ -12,7 +11,7 @@ import torchvision.transforms as T
 
 class GalaxyZooDataset(Dataset):
     """
-    Minimal, clean dataset class for SimCLR training.
+    Dataset class for SimCLR training on Galaxy Zoo.
     Loads galaxy images, applies preprocessing, and generates
     two augmented views of each image.
     """
@@ -22,8 +21,8 @@ class GalaxyZooDataset(Dataset):
         csv_path: str,
         image_dir: str,
         mapping_csv: str,
-        n_samples: int = 100000,
-        image_size: int = 64,
+        n_samples: int = 15000,
+        image_size: int = 96,
     ):
         self.image_dir = Path(image_dir)
         self.image_size = image_size
@@ -53,28 +52,31 @@ class GalaxyZooDataset(Dataset):
         self.galaxy_ids = merged["asset_id"].values
 
         # -------------------------------
-        # Preprocessing (centre crop + resize)
+        # Full transform: crop + aug + tensor
         # -------------------------------
-        self.base_transform = T.Compose([
-            T.CenterCrop(160),       # images are ~256px; this reduces noise
-            T.Resize(image_size),
-            T.ToTensor(),
-        ])
+        self.transform = T.Compose([
+            # work on central region to reduce junk
+            T.CenterCrop(160),
 
-        # -------------------------------
-        # Augmentations for SimCLR
-        # -------------------------------
-        self.augment = T.Compose([
-            T.RandomResizedCrop(image_size, scale=(0.5, 1.0)),
-            T.RandomHorizontalFlip(),
-            T.RandomVerticalFlip(),
-            T.RandomRotation(20),
+            # main SimCLR crop at target resolution
+            T.RandomResizedCrop(self.image_size, scale=(0.5, 1.0)),
+
+            # geometry
+            T.RandomHorizontalFlip(p=0.5),
+            T.RandomRotation(10),
+
+            # gentle photometry
             T.ColorJitter(
-                brightness=0.2,
-                contrast=0.2,
-                saturation=0.2,
-                hue=0.05,
+                brightness=0.05,
+                contrast=0.05,
+                saturation=0.05,
+                hue=0.0,
             ),
+
+            # mild blur for SimCLR invariance
+            T.GaussianBlur(kernel_size=3, sigma=(0.1, 1.0)),
+
+            T.ToTensor(),
         ])
 
     def __len__(self):
@@ -88,12 +90,10 @@ class GalaxyZooDataset(Dataset):
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, int]:
         galaxy_id = self.galaxy_ids[idx]
 
-        # Load + preprocessing
         img = self.load_image(galaxy_id)
-        img = self.base_transform(img)
 
-        # Two augmented views
-        view1 = self.augment(img)
-        view2 = self.augment(img)
+        # Two independently augmented views
+        view1 = self.transform(img)
+        view2 = self.transform(img)
 
         return view1, view2, int(galaxy_id)

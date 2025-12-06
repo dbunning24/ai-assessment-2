@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 import numpy as np
+import argparse
 
 from data.dataset import GalaxyZooDataset
 from models.simclr import SimCLR
@@ -78,8 +79,22 @@ def extract_features(
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Extract features from trained encoder")
+
+    parser.add_argument("--csv-path", type=str, default="data/gz2spec.csv")
+    parser.add_argument("--mapping-csv", type=str, default="data/gz2maps.csv")
+    parser.add_argument("--image-dir", type=str, default="data/images")
+    parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument("--n-samples", type=int, default=100000)
+    parser.add_argument("--device", type=str, default=None)
+
+    args = parser.parse_args()
+
     extract_features(
-        csv_path="data/gz2spec.csv",
-        mapping_csv="data/gz2maps.csv",
-        image_dir="data/images/",
+        csv_path=args.csv_path,
+        mapping_csv=args.mapping_csv,
+        image_dir=args.image_dir,
+        batch_size=args.batch_size,
+        n_samples=args.n_samples,
+        device=args.device,
     )
