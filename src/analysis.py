@@ -137,6 +137,11 @@ def run_analysis(tag: str, n_pca: int, min_cluster_size: int, min_samples: int):
         metric="euclidean"
     )
     umap_emb = umap_model.fit_transform(features)
+
+    from sklearn.manifold import trustworthiness
+
+    tw = trustworthiness(features, umap_emb, n_neighbors=30)
+    print("UMAP Trustworthiness:", tw)
     df["umap_x"] = umap_emb[:,0]
     df["umap_y"] = umap_emb[:,1]
 
